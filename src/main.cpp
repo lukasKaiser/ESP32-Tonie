@@ -26,6 +26,23 @@ HardwareSerial mySerial(1);
 DFRobotDFPlayerMini myDFPlayer;
 void printDetail(uint8_t type, int value);
 
+struct Button {
+  const uint8_t PIN;
+  uint32_t numberKeyPresses;
+  bool pressed;
+};
+
+Button buttonUp = {15, 0, false};
+Button buttonDown = {4, 0, false};
+int volume = 0;
+
+void IRAM_ATTR isrUp() {
+  buttonUp.pressed = true;
+}
+void IRAM_ATTR isrDown() {
+  buttonDown.pressed = true;
+}
+
 void setup()
 {
   mySerial.begin(9600, SERIAL_8N1, 16, 17);
@@ -43,17 +60,58 @@ void setup()
   }
   Serial.println(F("DFPlayer Mini online."));
 
-  myDFPlayer.volume(5);  //Set volume value. From 0 to 30
+  pinMode(buttonUp.PIN, INPUT_PULLUP);
+  attachInterrupt(buttonUp.PIN, isrUp, FALLING);
+  pinMode(buttonDown.PIN, INPUT_PULLUP);
+  attachInterrupt(buttonDown.PIN, isrDown, FALLING);
+  
+  //----Read imformation----
+  Serial.println(myDFPlayer.readState()); //read mp3 state
+  Serial.println(myDFPlayer.readVolume()); //read current volume
+  Serial.println(myDFPlayer.readEQ()); //read EQ setting
+  Serial.println(myDFPlayer.readFileCounts()); //read all file counts in SD card
+  Serial.println(myDFPlayer.readCurrentFileNumber()); //read current play file number
+  Serial.println(myDFPlayer.readFileCountsInFolder(1)); //read fill counts in folder SD:/03
+  
+  volume = 15;
+
+  myDFPlayer.volume(volume);  //Set volume value. From 0 to 30
+  myDFPlayer.enableLoopAll();
   myDFPlayer.play(1);  //Play the first mp3
 }
 
 void loop()
 {
   static unsigned long timer = millis();
+  static unsigned long timer2 = millis();
+
+  if (buttonUp.pressed && millis() - timer2 > 250) {
+    buttonUp.pressed = false;
+    timer2 = millis(); // debounce
+    
+    if(volume < 30)
+    {
+      volume++;
+      myDFPlayer.volume(volume);
+    }
+    Serial.printf("buttonUp Volume = %d\n", volume);
+  }
+
+  if (buttonDown.pressed && millis() - timer2 > 250) {
+    buttonDown.pressed = false;
+    timer2 = millis();
+
+    if(volume > 0)
+    {
+      volume--;
+      myDFPlayer.volume(volume);
+    }
+    Serial.printf("buttonDown Volume = %d\n", volume);
+  }
 
   if (millis() - timer > 150000) {
     timer = millis();
-    myDFPlayer.next();  //Play next mp3 every 3 second.
+    //myDFPlayer.next();  //Play next mp3 every 3 second.
   }
 
   if (myDFPlayer.available()) {
